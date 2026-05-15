@@ -31,10 +31,13 @@ STREET_TYPES = {
     "Parkway": "Pkwy", "Highway": "Hwy", "Freeway": "Fwy",
     "Circle": "Cir", "Terrace": "Ter", "Trail": "Trl",
     "Square": "Sq", "Alley": "Aly", "Bend": "Bnd", "Bridge": "Brg",
-    "Bypass": "Byp", "Crossing": "Xing", "Way": "Way",
+    "Bypass": "Byp", "Crossing": "Xing", "Way": "Way", "Wy": "Way",
     # Rural / numbered road types — preserve as title case
     "Route": "Route", "County Road": "County Road", "Us Highway": "US Hwy",
     "State Highway": "State Hwy", "State Road": "State Rd", "Farm Road": "Farm Rd",
+    "State Route": "SR",
+    "Township Road": "Twp Rd", "Twp Road": "Twp Rd", "Twp Rd": "Twp Rd",
+    "Township Rd": "Twp Rd",
 }
 
 CARDINAL_DIRECTIONS = {
@@ -120,19 +123,28 @@ def assemble_from_tags(tagged: dict) -> str:
     stype    = abbreviate_street_type(tagged.get("StreetNamePostType", ""))
     post_dir = abbreviate_direction(tagged.get("StreetNamePostDirectional", ""))
 
-    unit_type = UNIT_TYPES.get(
-        tagged.get("OccupancyType", "").title(),
-        tagged.get("OccupancyType", "").title()
-    )
-    unit_id   = tagged.get("OccupancyIdentifier", "")
+    occ_type  = tagged.get("OccupancyType", "")
+    occ_id    = tagged.get("OccupancyIdentifier", "")
+    # If there is no OccupancyType, usaddress likely misread a road number as a unit —
+    # treat it as part of the street name but append after the street type
+    road_number = ""
+    if occ_id and not occ_type:
+        road_number = occ_id
+        occ_id = ""
+    unit_type = UNIT_TYPES.get(occ_type.title(), occ_type.title())
+    unit_id   = occ_id
     unit_part = f"{unit_type} {unit_id}".strip() if unit_type or unit_id else ""
+
+    bldg_type = tagged.get("SubaddressType", "").title()
+    bldg_id   = tagged.get("SubaddressIdentifier", "")
+    bldg_part = f"{bldg_type} {bldg_id}".strip() if bldg_type or bldg_id else ""
 
     city  = tagged.get("PlaceName", "").title()
     state = tagged.get("StateName", "").strip().upper()
     zipp  = normalize_zip(tagged.get("ZipCode", ""))
 
     # Build street line
-    street_parts = [p for p in [num, pre_dir, pre_type, street, stype, post_dir] if p]
+    street_parts = [p for p in [num, pre_dir, pre_type, street, stype, road_number, post_dir] if p]
     street_line  = " ".join(street_parts)
 
     # Build city/state/zip
@@ -142,7 +154,7 @@ def assemble_from_tags(tagged: dict) -> str:
         csz = f"{csz} {zipp}".strip()
 
     # Final assembly
-    components = [p for p in [street_line, unit_part, csz] if p]
+    components = [p for p in [street_line, bldg_part, unit_part, csz] if p]
     return ", ".join(components)
 
 
@@ -171,6 +183,43 @@ def convert_leading_number_word(text: str) -> str:
         text = re.sub(rf"^{word}\b", digit, text, flags=re.IGNORECASE)
     return text
 
+
+def assemble_intersection(tagged: dict) -> str:
+    """Reassemble an intersection address from usaddress tags."""
+    corner   = tagged.get("CornerOf", "").lower().capitalize()
+    street1  = tagged.get("StreetName", "").title()
+    type1    = abbreviate_street_type(tagged.get("StreetNamePostType", ""))
+    pre_dir1 = abbreviate_direction(tagged.get("StreetNamePreDirectional", ""))
+    post_dir1= abbreviate_direction(tagged.get("StreetNamePostDirectional", ""))
+
+    sep      = tagged.get("IntersectionSeparator", "&")
+
+    pre_type2= STREET_TYPES.get(tagged.get("SecondStreetNamePreType", "").title(), tagged.get("SecondStreetNamePreType", "").title())
+    street2  = tagged.get("SecondStreetName", "").title()
+    type2    = abbreviate_street_type(tagged.get("SecondStreetNamePostType", ""))
+    pre_dir2 = abbreviate_direction(tagged.get("SecondStreetNamePreDirectional", ""))
+    post_dir2= abbreviate_direction(tagged.get("SecondStreetNamePostDirectional", ""))
+
+    city  = tagged.get("PlaceName", "").title()
+    state = tagged.get("StateName", "").strip().upper()
+    zipp  = normalize_zip(tagged.get("ZipCode", ""))
+
+    side1_parts = [p for p in [pre_dir1, street1, type1, post_dir1] if p]
+    side1 = " ".join(side1_parts)
+
+    side2_parts = [p for p in [pre_type2, street2, type2, post_dir2, pre_dir2] if p]
+    side2 = " ".join(side2_parts)
+
+    intersection = f"{corner} {side1} {sep} {side2}".strip()
+
+    csz_parts = [p for p in [city, state] if p]
+    csz = ", ".join(csz_parts)
+    if zipp:
+        csz = f"{csz} {zipp}".strip()
+
+    components = [p for p in [intersection, csz] if p]
+    return ", ".join(components)
+
 def normalize_address(raw: str) -> tuple[str, str]:
     """
     Normalize a single address string.
@@ -184,9 +233,12 @@ def normalize_address(raw: str) -> tuple[str, str]:
 
     try:
         tagged, addr_type = usaddress.tag(raw)
-        if addr_type not in ("Street Address", "Intersection"):
+        if addr_type == "Intersection":
+            normalized = fix_punctuation(fix_highway_designators(lowercase_ordinals(assemble_intersection(tagged))))
+        elif addr_type == "Street Address":
+            normalized = fix_punctuation(fix_highway_designators(lowercase_ordinals(assemble_from_tags(tagged))))
+        else:
             return (fix_punctuation(fix_highway_designators(lowercase_ordinals(smart_title(clean_whitespace(raw))))), "review")
-        normalized = fix_punctuation(fix_highway_designators(lowercase_ordinals(assemble_from_tags(tagged))))
         return (normalized, "ok")
     except usaddress.RepeatedLabelError:
         return (fix_punctuation(fix_highway_designators(lowercase_ordinals(smart_title(clean_whitespace(raw))))), "review")
