@@ -56,13 +56,14 @@ python3 normalize_addresses.py --input addresses.csv --column "polling_place_add
 5. **Parses the address** using the `usaddress` library, which breaks it into components like street number, street name, street type, city, state, and zip
 6. **Abbreviates street types** — e.g. `Street → St`, `Avenue → Ave`, `Boulevard → Blvd`, `State Route → SR`, `Way/Wy → Way`. Unrecognized street types are title-cased
 7. **Abbreviates cardinal directions** — e.g. `North → N`, `Southeast → SE`. Handles both fully spelled-out and already-abbreviated inputs
-8. **Preserves rural and highway road types** — `Route`, `County Road`, `Township Road (Twp Rd)`, `US Hwy`, `State Hwy`, `SR`, etc. are kept intact with correct formatting
+8. **Standardizes rural and highway road types** — `County Road → CR`, `County Highway/Hiway → County Hwy`, `Township Road → Twp Rd`, `State Route → SR`, `US Hwy`, `State Hwy`, etc.
 9. **Fixes casing:**
    - Street names and city are title-cased
    - State is uppercased
    - Ordinal indicators are lowercased (`1St → 1st`, `23Rd → 23rd`)
    - Highway designators are uppercased (`Us → US`, `Ih → IH`, `Fm → FM`, `Sh → SH`)
    - Apostrophe-s is lowercased (`McDonald'S → McDonald's`)
+   - Apostrophes at the start or end of a word are removed
 10. **Fixes # formatting** — removes the extra space between `#` and the unit number (`# 101 → #101`)
 11. **Preserves building and unit numbers** — building numbers (e.g. `Building 4`, `Bldg 2`) and unit numbers (e.g. `Apt 5`, `Suite 200`) are kept in the output
 12. **Handles road numbers** — numbered roads like `TWP RD 1082` or `County Road 519` keep their road number as part of the street name rather than treating it as a unit number
@@ -94,13 +95,14 @@ To quickly find rows that need attention, filter the `Normalization_Status` colu
 | `456 2ND AVENUE APT # 4B` | `456 2nd Ave, Apt #4B` |
 | `One University Way, Boston MA 02115` | `1 University Way, Boston, MA 02115` |
 | `6322 US HWY 87 E, SAN ANTONIO TX 78222` | `6322 US Hwy 87 E, San Antonio, TX 78222` |
-| `404 COUNTY ROAD 519, AUSTIN TX 78701` | `404 County Road 519, Austin, TX 78701` |
+| `404 COUNTY ROAD 519, AUSTIN TX 78701` | `404 CR 519, Austin, TX 78701` |
 | `5145 N FM 620, AUSTIN TX 78732` | `5145 N FM 620, Austin, TX 78732` |
 | `50 STATE ROUTE 305, BATTLE MOUNTAIN NV 89820` | `50 SR 305, Battle Mountain, NV 89820` |
 | `25 TWP RD 1082, WATERLOO, OH 45688` | `25 Twp Rd 1082, Waterloo, OH 45688` |
 | `123 MAIN ST BUILDING 4, AUSTIN TX 78701` | `123 Main St, Building 4, Austin, TX 78701` |
 | `Corner of Euclid & Hwy 95, Goldfield, NV 89013` | `Corner of Euclid & Hwy 95, Goldfield, NV 89013` |
 | `12115 SE LOOP 410, SAN ANTONIO TX 78221` | `12115 SE Loop 410, San Antonio, TX 78221` |
+| `100 COUNTY HIGHWAY 12, MADISON WI 53701` | `100 County Hwy 12, Madison, WI 53701` |
 | `100 MCDONALD'S DR, AUSTIN TX 78750` | `100 McDonald's Dr, Austin, TX 78750` |
 
 ---
