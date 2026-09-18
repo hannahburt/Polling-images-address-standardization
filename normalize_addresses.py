@@ -33,7 +33,8 @@ STREET_TYPES = {
     "Square": "Sq", "Alley": "Aly", "Bend": "Bnd", "Bridge": "Brg",
     "Bypass": "Byp", "Crossing": "Xing", "Way": "Way", "Wy": "Way",
     # Rural / numbered road types — preserve as title case
-    "Route": "Route", "County Road": "County Road", "Us Highway": "US Hwy",
+    "Route": "Route", "County Road": "CR", "County Rd": "CR", "Us Highway": "US Hwy",
+    "County Highway": "County Hwy", "County Hiway": "County Hwy", "County Hwy": "County Hwy",
     "State Highway": "State Hwy", "State Road": "State Rd", "Farm Road": "Farm Rd",
     "State Route": "SR",
     "Township Road": "Twp Rd", "Twp Road": "Twp Rd", "Twp Rd": "Twp Rd",
@@ -86,8 +87,10 @@ def fix_highway_designators(text: str) -> str:
 
 
 def fix_punctuation(text: str) -> str:
-    """Fix apostrophe-s casing ('S -> 's) and remove space after # (# 101 -> #101)."""
+    """Fix apostrophe-s casing ('S -> 's), remove apostrophes at start/end of words, and remove space after # (# 101 -> #101)."""
     text = re.sub(r"'S\b", "'s", text)
+    text = re.sub(r"(?<=\s)'|^'", "", text)
+    text = re.sub(r"'(?=\s)|'$", "", text)
     text = re.sub(r"#\s+", "#", text)
     return text
 
